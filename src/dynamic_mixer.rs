@@ -32,6 +32,7 @@ pub fn mixer<S>(channels: u16,
     let output = DynamicMixer {
         current_sources: Vec::with_capacity(16),
         input: input.clone(),
+        silence_samples: 0
     };
 
     (input, output)
@@ -69,6 +70,10 @@ pub struct DynamicMixer<S> {
 
     // The pending sounds.
     input: Arc<DynamicMixerController<S>>,
+
+    // The number of remaining silent samples needed to clean out the buffer
+    // after playback has finished.
+    silence_samples: u32
 }
 
 impl<S> Source for DynamicMixer<S>
@@ -110,7 +115,16 @@ impl<S> Iterator for DynamicMixer<S>
         }
 
         if self.current_sources.is_empty() {
-            return None;
+            if self.silence_samples > 0 {
+                self.silence_samples -= 1;
+                return Some(S::zero_value());
+
+            } else {
+                return None;
+            }
+
+        } else {
+            self.silence_samples = self.samples_rate();
         }
 
         let mut to_drop = Vec::new();
